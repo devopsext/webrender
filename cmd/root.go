@@ -13,6 +13,9 @@ import (
 	sreCommon "github.com/devopsext/sre/common"
 	sreProvider "github.com/devopsext/sre/provider"
 	utils "github.com/devopsext/utils"
+	"github.com/devopsext/webrender/common"
+	"github.com/devopsext/webrender/processor"
+	"github.com/devopsext/webrender/server"
 	"github.com/spf13/cobra"
 )
 
@@ -46,7 +49,28 @@ var stdoutOptions = sreProvider.StdoutOptions{
 var prometheusOptions = sreProvider.PrometheusOptions{
 	URL:    envGet("PROMETHEUS_METRICS_URL", "/metrics").(string),
 	Listen: envGet("PROMETHEUS_METRICS_LISTEN", "127.0.0.1:8080").(string),
-	Prefix: envGet("PROMETHEUS_METRICS_PREFIX", "chatops").(string),
+	Prefix: envGet("PROMETHEUS_METRICS_PREFIX", appName).(string),
+}
+
+var httpServerOptions = server.HttpServerOptions{
+	HealthcheckURL: envGet("HTTP_HEALTHCHECK_URL", "/healthcheck").(string),
+	ChromeURL:      envGet("HTTP_CHROME_URL", "/chrome").(string),
+	ServerName:     envGet("HTTP_SERVER_NAME", "").(string),
+	Listen:         envGet("HTTP_LISTEN", ":80").(string),
+	Tls:            envGet("HTTP_TLS", false).(bool),
+	Insecure:       envGet("HTTP_INSECURE", false).(bool),
+	Cert:           envGet("HTTP_CERT", "").(string),
+	Key:            envGet("HTTP_KEY", "").(string),
+	Chain:          envGet("HTTP_CHAIN", "").(string),
+}
+
+var chromeProcessorOptions = processor.ChromeProcessorOptions{
+	Path:      envGet("CHROME_PATH", "").(string),
+	Width:     envGet("CHROME_WIDTH", 1920).(int),
+	Height:    envGet("CHROME_HEIGHT", 1280).(int),
+	Timeout:   envGet("CHROME_TIMEOUT", 10).(int),
+	Delay:     envGet("CHROME_DELAY", 3).(int),
+	UserAgent: envGet("CHROME_USER_AGENT", appName).(string),
 }
 
 func getOnlyEnv(key string) string {
@@ -113,19 +137,14 @@ func Execute() {
 		},
 		Run: func(cmd *cobra.Command, args []string) {
 
-			/*obs := common.NewObservability(logs, metrics)
+			obs := common.NewObservability(logs, metrics)
+
 			processors := common.NewProcessors()
+			processors.Add(processor.NewChromeProcessor(chromeProcessorOptions, obs))
 
-			/*err := buildDefaultProcessors(defaultOptions, obs, processors)
-			if err != nil {
-				os.Exit(1)
-			}
-
-			bots := common.NewBots()
-			//bots.Add(bot.NewTelegram(telegramOptions, obs, processors))
-			bots.Add(bot.NewSlack(slackOptions, obs, processors))
-
-			bots.Start(&mainWG)*/
+			servers := common.NewServers()
+			servers.Add(server.NewHttpServer(httpServerOptions, processors, obs))
+			servers.Start(&mainWG)
 			mainWG.Wait()
 		},
 	}
@@ -145,6 +164,15 @@ func Execute() {
 	flags.StringVar(&prometheusOptions.URL, "prometheus-url", prometheusOptions.URL, "Prometheus endpoint url")
 	flags.StringVar(&prometheusOptions.Listen, "prometheus-listen", prometheusOptions.Listen, "Prometheus listen")
 	flags.StringVar(&prometheusOptions.Prefix, "prometheus-prefix", prometheusOptions.Prefix, "Prometheus prefix")
+
+	flags.StringVar(&httpServerOptions.HealthcheckURL, "http-healthcheck-url", httpServerOptions.HealthcheckURL, "Http healthcheck url")
+	flags.StringVar(&httpServerOptions.ServerName, "http-server-name", httpServerOptions.ServerName, "Http server name")
+	flags.StringVar(&httpServerOptions.Listen, "http-listen", httpServerOptions.Listen, "Http listen")
+	flags.BoolVar(&httpServerOptions.Tls, "http-tls", httpServerOptions.Tls, "Http TLS")
+	flags.BoolVar(&httpServerOptions.Insecure, "http-insecure", httpServerOptions.Insecure, "Http insecure skip verify")
+	flags.StringVar(&httpServerOptions.Cert, "http-cert", httpServerOptions.Cert, "Http cert file or content")
+	flags.StringVar(&httpServerOptions.Key, "http-key", httpServerOptions.Key, "Http key file or content")
+	flags.StringVar(&httpServerOptions.Chain, "http-chain", httpServerOptions.Chain, "Http CA chain file or content")
 
 	interceptSyscall()
 
