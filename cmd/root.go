@@ -54,7 +54,7 @@ var prometheusOptions = sreProvider.PrometheusOptions{
 
 var httpServerOptions = server.HttpServerOptions{
 	HealthcheckURL: envGet("HTTP_HEALTHCHECK_URL", "/healthcheck").(string),
-	ChromeURL:      envGet("HTTP_CHROME_URL", "/chrome").(string),
+	ImageURL:       envGet("HTTP_IMAGE_URL", "/image").(string),
 	ServerName:     envGet("HTTP_SERVER_NAME", "").(string),
 	Listen:         envGet("HTTP_LISTEN", ":80").(string),
 	Tls:            envGet("HTTP_TLS", false).(bool),
@@ -64,13 +64,15 @@ var httpServerOptions = server.HttpServerOptions{
 	Chain:          envGet("HTTP_CHAIN", "").(string),
 }
 
-var chromeProcessorOptions = processor.ChromeProcessorOptions{
-	Path:      envGet("CHROME_PATH", "").(string),
-	Width:     envGet("CHROME_WIDTH", 1920).(int),
-	Height:    envGet("CHROME_HEIGHT", 1280).(int),
-	Timeout:   envGet("CHROME_TIMEOUT", 10).(int),
-	Delay:     envGet("CHROME_DELAY", 3).(int),
-	UserAgent: envGet("CHROME_USER_AGENT", appName).(string),
+var imageProcessorOptions = processor.ImageProcessorOptions{
+	BrowserPath: envGet("IMAGE_BROWSER_PATH", "").(string),
+	BrowserKind: envGet("IMAGE_BROWSER_KIND", "chrome").(string),
+	Width:       envGet("IMAGE_WIDTH", 1920).(int),
+	Height:      envGet("IMAGE_HEIGHT", 1280).(int),
+	Timeout:     envGet("IMAGE_TIMEOUT", 10).(int),
+	Delay:       envGet("IMAGE_DELAY", 3).(int),
+	UserAgent:   envGet("IMAGE_USER_AGENT", appName).(string),
+	AsPDF:       envGet("IMAGE_AS_PDF", false).(bool),
 }
 
 func getOnlyEnv(key string) string {
@@ -140,7 +142,7 @@ func Execute() {
 			obs := common.NewObservability(logs, metrics)
 
 			processors := common.NewProcessors()
-			processors.Add(processor.NewChromeProcessor(chromeProcessorOptions, obs))
+			processors.Add(processor.NewImageProcessor(imageProcessorOptions, obs))
 
 			servers := common.NewServers()
 			servers.Add(server.NewHttpServer(httpServerOptions, processors, obs))
@@ -166,6 +168,7 @@ func Execute() {
 	flags.StringVar(&prometheusOptions.Prefix, "prometheus-prefix", prometheusOptions.Prefix, "Prometheus prefix")
 
 	flags.StringVar(&httpServerOptions.HealthcheckURL, "http-healthcheck-url", httpServerOptions.HealthcheckURL, "Http healthcheck url")
+	flags.StringVar(&httpServerOptions.ImageURL, "http-image-url", httpServerOptions.ImageURL, "Http image url")
 	flags.StringVar(&httpServerOptions.ServerName, "http-server-name", httpServerOptions.ServerName, "Http server name")
 	flags.StringVar(&httpServerOptions.Listen, "http-listen", httpServerOptions.Listen, "Http listen")
 	flags.BoolVar(&httpServerOptions.Tls, "http-tls", httpServerOptions.Tls, "Http TLS")

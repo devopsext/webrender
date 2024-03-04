@@ -11,6 +11,7 @@ require (
 	github.com/chromedp/chromedp v0.9.5
 	github.com/devopsext/sre v0.3.0
 	github.com/devopsext/utils v0.3.3
+	github.com/go-playground/form v3.1.4+incompatible
 	github.com/spf13/cobra v1.8.0
 	gopkg.in/yaml.v2 v2.4.0
 )
@@ -71,4 +72,5 @@ require (
 	google.golang.org/grpc v1.42.0 // indirect
 	google.golang.org/protobuf v1.27.1 // indirect
 	gopkg.in/DataDog/dd-trace-go.v1 v1.31.1 // indirect
+	gopkg.in/go-playground/assert.v1 v1.2.1 // indirect
 )

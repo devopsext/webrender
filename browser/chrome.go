@@ -1,12 +1,9 @@
-package processor
+package browser
 
 import (
 	"context"
 	"errors"
-	"fmt"
-	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/chromedp/cdproto/inspector"
@@ -18,15 +15,12 @@ import (
 	"github.com/devopsext/webrender/common"
 )
 
-type ChromeRequest struct {
+type ChromeBrowserImage struct {
+	Data []byte
+	DOM  string
 }
 
-type ChromeScreenshot struct {
-	data []byte
-	dom  string
-}
-
-type ChromeProcessorOptions struct {
+type ChromeBrowserOptions struct {
 	Width      int
 	Height     int
 	UserAgent  string
@@ -41,40 +35,30 @@ type ChromeProcessorOptions struct {
 
 	// http codes to screenshot (used as a filter)
 	ScreenshotCodes []int
-
-	// save screenies as PDF's instead
-	AsPDF bool
+	AsPDF           bool
 }
 
-type ChromeProcessor struct {
-	options ChromeProcessorOptions
+type ChromeBrowser struct {
+	options ChromeBrowserOptions
 	logger  sreCommon.Logger
 	meter   sreCommon.Meter
 }
 
-func ChromeProcessorType() string {
-	return "Chrome"
-}
-
-func (p *ChromeProcessor) Type() string {
-	return ChromeProcessorType()
-}
-
 // buildTasks builds the chromedp tasks slice
-func (p *ChromeProcessor) buildTasks(url *url.URL, doNavigate bool, buf *[]byte, dom *string) chromedp.Tasks {
+func (c *ChromeBrowser) buildTasks(url *url.URL, doNavigate bool, buf *[]byte, dom *string) chromedp.Tasks {
 	var actions chromedp.Tasks
 
-	if len(p.options.HeadersMap) > 0 {
-		actions = append(actions, network.Enable(), network.SetExtraHTTPHeaders(network.Headers(p.options.HeadersMap)))
+	if len(c.options.HeadersMap) > 0 {
+		actions = append(actions, network.Enable(), network.SetExtraHTTPHeaders(network.Headers(c.options.HeadersMap)))
 	}
 
 	if doNavigate {
 		actions = append(actions, chromedp.Navigate(url.String()))
-		if len(p.options.JsCode) > 0 {
-			actions = append(actions, chromedp.Evaluate(p.options.JsCode, nil))
+		if len(c.options.JsCode) > 0 {
+			actions = append(actions, chromedp.Evaluate(c.options.JsCode, nil))
 		}
-		if p.options.Delay > 0 {
-			actions = append(actions, chromedp.Sleep(time.Duration(p.options.Delay)*time.Second))
+		if c.options.Delay > 0 {
+			actions = append(actions, chromedp.Sleep(time.Duration(c.options.Delay)*time.Second))
 		}
 		actions = append(actions, chromedp.Stop())
 	}
@@ -83,7 +67,7 @@ func (p *ChromeProcessor) buildTasks(url *url.URL, doNavigate bool, buf *[]byte,
 	actions = append(actions, chromedp.OuterHTML(":root", dom, chromedp.ByQueryAll))
 
 	// should we print as pdf?
-	if p.options.AsPDF {
+	if c.options.AsPDF {
 		actions = append(actions, chromedp.ActionFunc(func(ctx context.Context) error {
 			var err error
 			*buf, _, err = page.PrintToPDF().
@@ -96,7 +80,7 @@ func (p *ChromeProcessor) buildTasks(url *url.URL, doNavigate bool, buf *[]byte,
 	}
 
 	// otherwise screenshot as png
-	if p.options.FullPage {
+	if c.options.FullPage {
 		actions = append(actions, chromedp.FullScreenshot(buf, 100))
 	} else {
 		actions = append(actions, chromedp.CaptureScreenshot(buf))
@@ -106,24 +90,24 @@ func (p *ChromeProcessor) buildTasks(url *url.URL, doNavigate bool, buf *[]byte,
 }
 
 // https://github.com/chromedp/examples/blob/255873ca0d76b00e0af8a951a689df3eb4f224c3/screenshot/main.go
-func (p *ChromeProcessor) Screenshot(url *url.URL) (*ChromeScreenshot, error) {
+func (c *ChromeBrowser) Image(url *url.URL) (*ChromeBrowserImage, error) {
 
-	r := &ChromeScreenshot{}
+	r := &ChromeBrowserImage{}
 
 	// setup chromedp default options
 	options := []chromedp.ExecAllocatorOption{}
 	options = append(options, chromedp.DefaultExecAllocatorOptions[:]...)
-	options = append(options, chromedp.UserAgent(p.options.UserAgent))
+	options = append(options, chromedp.UserAgent(c.options.UserAgent))
 	options = append(options, chromedp.DisableGPU)
 	options = append(options, chromedp.Flag("ignore-certificate-errors", true)) // RIP shittyproxy.go
-	options = append(options, chromedp.WindowSize(p.options.Width, p.options.Height))
+	options = append(options, chromedp.WindowSize(c.options.Width, c.options.Height))
 
-	if p.options.Path != "" {
-		options = append(options, chromedp.ExecPath(p.options.Path))
+	if c.options.Path != "" {
+		options = append(options, chromedp.ExecPath(c.options.Path))
 	}
 
-	if p.options.Proxy != "" {
-		options = append(options, chromedp.ProxyServer(p.options.Proxy))
+	if c.options.Proxy != "" {
+		options = append(options, chromedp.ProxyServer(c.options.Proxy))
 	}
 
 	actx, acancel := chromedp.NewExecAllocator(context.Background(), options...)
@@ -137,7 +121,7 @@ func (p *ChromeProcessor) Screenshot(url *url.URL) (*ChromeScreenshot, error) {
 	//		Note:	You're not supposed to delay the initial run context, so we use WithTimeout
 	//				 https://pkg.go.dev/github.com/chromedp/chromedp#Run
 
-	tabCtx, cancelTabCtx := context.WithTimeout(browserCtx, time.Duration(p.options.Timeout)*time.Second)
+	tabCtx, cancelTabCtx := context.WithTimeout(browserCtx, time.Duration(c.options.Timeout)*time.Second)
 	defer cancelTabCtx()
 
 	// Run the initial browser
@@ -177,10 +161,11 @@ func (p *ChromeProcessor) Screenshot(url *url.URL) (*ChromeScreenshot, error) {
 		case *runtime.EventConsoleAPICalled:
 
 			// use a buffer to read each arg passed to the console.* call
+			c.logger.Debug("%v", ev)
 
 		case *runtime.EventExceptionThrown:
 		default:
-			p.logger.Debug("%v", ev)
+			//c.logger.Debug("%v", ev)
 		}
 	})
 
@@ -193,21 +178,24 @@ func (p *ChromeProcessor) Screenshot(url *url.URL) (*ChromeScreenshot, error) {
 		// http
 		case *network.EventRequestWillBeSent:
 			// record a fresh request that will be sent
+			c.logger.Debug("%v", ev)
 		case *network.EventResponseReceived:
 			// update the networkLog map with updated information about response
+			c.logger.Debug("%v", ev)
 		case *network.EventLoadingFailed:
 			// update the network map with the error experienced
+			c.logger.Debug("%v", ev)
 		// websockets
 		case *network.EventWebSocketCreated:
 		case *network.EventWebSocketHandshakeResponseReceived:
 		case *network.EventWebSocketFrameError:
 		default:
-			p.logger.Debug("%v", ev)
+			// c.logger.Debug("%v", ev)
 		}
 	})
 
 	// perform navigation on the tab context and attempt to take a clean screenshot
-	err := chromedp.Run(tabCtx, p.buildTasks(url, true, &r.data, &r.dom))
+	err := chromedp.Run(tabCtx, c.buildTasks(url, true, &r.Data, &r.DOM))
 
 	if errors.Is(err, context.DeadlineExceeded) {
 		// if the context timeout exceeded (e.g. on a long page load) then
@@ -217,7 +205,7 @@ func (p *ChromeProcessor) Screenshot(url *url.URL) (*ChromeScreenshot, error) {
 		// create a new tab context for this scenario, since our previous
 		// context expired using a context timeout delay again to help
 		// prevent hanging scenarios
-		newTabCtx, cancelNewTabCtx := context.WithTimeout(browserCtx, time.Duration(p.options.Timeout)*time.Second)
+		newTabCtx, cancelNewTabCtx := context.WithTimeout(browserCtx, time.Duration(c.options.Timeout)*time.Second)
 		defer cancelNewTabCtx()
 
 		// listen for crashes on this backup context as well
@@ -228,7 +216,7 @@ func (p *ChromeProcessor) Screenshot(url *url.URL) (*ChromeScreenshot, error) {
 		})
 
 		// attempt to capture the screenshot of the tab and replace error accordingly
-		err = chromedp.Run(newTabCtx, p.buildTasks(url, false, &r.data, &r.dom))
+		err = chromedp.Run(newTabCtx, c.buildTasks(url, false, &r.Data, &r.DOM))
 	}
 
 	if err != nil {
@@ -240,64 +228,9 @@ func (p *ChromeProcessor) Screenshot(url *url.URL) (*ChromeScreenshot, error) {
 	return r, nil
 }
 
-func (p *ChromeProcessor) HandleHttpRequest(w http.ResponseWriter, r *http.Request) error {
+func NewChromeBrowser(options ChromeBrowserOptions, observability *common.Observability) *ChromeBrowser {
 
-	channel := strings.TrimLeft(r.URL.Path, "/")
-
-	labels := make(sreCommon.Labels)
-	labels["channel"] = channel
-
-	requests := p.meter.Counter("requests", "Count of all google processor requests", labels, "google", "processor")
-	errs := p.meter.Counter("errors", "Count of all google processor errors", labels, "google", "processor")
-
-	requests.Inc()
-
-	/*var body []byte
-	if r.Body != nil {
-		if data, err := io.ReadAll(r.Body); err == nil {
-			body = data
-		}
-	}
-
-	/*if len(body) == 0 {
-		errs.Inc()
-		err := errors.New("empty body")
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return err
-	}
-
-	/*var request ChromeRequest
-	if err := json.Unmarshal(body, &request); err != nil {
-		errs.Inc()
-		http.Error(w, "Error unmarshaling message", http.StatusInternalServerError)
-		return err
-	}*/
-
-	u, err := url.Parse("https://google.com")
-	if err != nil {
-		errs.Inc()
-		http.Error(w, fmt.Sprintf("could not parse URL: %v", err), http.StatusInternalServerError)
-		return err
-	}
-
-	ss, err := p.Screenshot(u)
-	if err != nil {
-		errs.Inc()
-		http.Error(w, fmt.Sprintf("could not make screenshot: %v", err), http.StatusInternalServerError)
-		return err
-	}
-
-	if _, err := w.Write(ss.data); err != nil {
-		errs.Inc()
-		http.Error(w, fmt.Sprintf("could not write response: %v", err), http.StatusInternalServerError)
-		return err
-	}
-	return nil
-}
-
-func NewChromeProcessor(options ChromeProcessorOptions, observability *common.Observability) *ChromeProcessor {
-
-	return &ChromeProcessor{
+	return &ChromeBrowser{
 		options: options,
 		logger:  observability.Logs(),
 		meter:   observability.Metrics(),

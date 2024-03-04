@@ -18,7 +18,7 @@ import (
 
 type HttpServerOptions struct {
 	HealthcheckURL string
-	ChromeURL      string
+	ImageURL       string
 
 	ServerName string
 	Listen     string
@@ -184,7 +184,7 @@ func (h *HttpServer) setProcessor(m map[string]common.HttpProcessor, url string,
 func (h *HttpServer) getProcessors() map[string]common.HttpProcessor {
 
 	m := make(map[string]common.HttpProcessor)
-	h.setProcessor(m, h.options.ChromeURL, processor.ChromeProcessorType())
+	h.setProcessor(m, h.options.ImageURL, processor.ImageProcessorType())
 	return m
 }
 
