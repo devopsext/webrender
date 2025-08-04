@@ -46,8 +46,8 @@ func (h *HttpServer) processURL(url string, mux *http.ServeMux, p common.HttpPro
 		labels := make(sreCommon.Labels)
 		labels["url"] = url
 
-		requests := h.meter.Counter("requests", "Count of all http server requests", labels, "http", "server")
-		errors := h.meter.Counter("errors", "Count of all server input errors", labels, "http", "server")
+		requests := h.meter.Counter("", "requests", "Count of all http server requests", labels, "http", "server")
+		errors := h.meter.Counter("", "errors", "Count of all server input errors", labels, "http", "server")
 
 		mux.HandleFunc(url, func(w http.ResponseWriter, r *http.Request) {
 
