@@ -112,8 +112,8 @@ func (p *ImageProcessor) HandleHttpRequest(w http.ResponseWriter, r *http.Reques
 	labels := make(sreCommon.Labels)
 	labels["channel"] = channel
 
-	requests := p.meter.Counter("requests", "Count of all google processor requests", labels, "google", "processor")
-	errs := p.meter.Counter("errors", "Count of all google processor errors", labels, "google", "processor")
+	requests := p.meter.Counter("", "requests", "Count of all google processor requests", labels, "google", "processor")
+	errs := p.meter.Counter("", "errors", "Count of all google processor errors", labels, "google", "processor")
 
 	requests.Inc()
 
