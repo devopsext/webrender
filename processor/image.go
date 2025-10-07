@@ -23,6 +23,7 @@ type ImageProcessorRequest struct {
 	Timeout   int                    `form:"timeout,omitempty"`
 	Delay     int                    `form:"delay,omitempty"`
 	AsPDF     bool                   `form:"asPDF,omitempty"`
+	FullPage  bool                   `form:"fullPage,omitempty"`
 	Headers   map[string]interface{} `form:"headers,omitempty"`
 }
 
@@ -86,7 +87,7 @@ func (p *ImageProcessor) chromeImage(r *ImageProcessorRequest) ([]byte, error) {
 		UserAgent:  userAgent,
 		Timeout:    timeout,
 		Delay:      delay,
-		FullPage:   true,
+		FullPage:   r.FullPage,
 		AsPDF:      r.AsPDF,
 		HeadersMap: r.Headers,
 	}
