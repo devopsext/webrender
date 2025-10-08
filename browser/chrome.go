@@ -1,8 +1,11 @@
 package browser
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"image"
+	"image/png"
 	"net/url"
 	"time"
 
@@ -36,12 +39,71 @@ type ChromeBrowserOptions struct {
 	// http codes to screenshot (used as a filter)
 	ScreenshotCodes []int
 	AsPDF           bool
+
+	// Image cropping parameters
+	OffsetX    int // X offset for cropping
+	OffsetY    int // Y offset for cropping (to skip header)
+	CropWidth  int // Cropped width
+	CropHeight int // Cropped height
 }
 
 type ChromeBrowser struct {
 	options ChromeBrowserOptions
 	logger  sreCommon.Logger
 	meter   sreCommon.Meter
+}
+
+// cropImage crops the image based on the provided offset and dimensions
+func (c *ChromeBrowser) cropImage(imageData []byte) ([]byte, error) {
+	if c.options.OffsetX == 0 && c.options.OffsetY == 0 && c.options.CropWidth == 0 && c.options.CropHeight == 0 {
+		return imageData, nil
+	}
+
+	img, _, err := image.Decode(bytes.NewReader(imageData))
+	if err != nil {
+		return nil, err
+	}
+
+	bounds := img.Bounds()
+
+	x0 := c.options.OffsetX
+	y0 := c.options.OffsetY
+	x1 := bounds.Max.X
+	y1 := bounds.Max.Y
+
+	if c.options.CropWidth > 0 {
+		x1 = x0 + c.options.CropWidth
+	}
+	if c.options.CropHeight > 0 {
+		y1 = y0 + c.options.CropHeight
+	}
+
+	if x0 < bounds.Min.X {
+		x0 = bounds.Min.X
+	}
+	if y0 < bounds.Min.Y {
+		y0 = bounds.Min.Y
+	}
+	if x1 > bounds.Max.X {
+		x1 = bounds.Max.X
+	}
+	if y1 > bounds.Max.Y {
+		y1 = bounds.Max.Y
+	}
+
+	cropRect := image.Rect(x0, y0, x1, y1)
+	croppedImg := img.(interface {
+		SubImage(r image.Rectangle) image.Image
+	}).SubImage(cropRect)
+
+	// encode the cropped image back to PNG
+	var buf bytes.Buffer
+	err = png.Encode(&buf, croppedImg)
+	if err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
 }
 
 // buildTasks builds the chromedp tasks slice
@@ -221,6 +283,16 @@ func (c *ChromeBrowser) Image(url *url.URL) (*ChromeBrowserImage, error) {
 
 	if err != nil {
 		return nil, err
+	}
+
+	if !c.options.AsPDF {
+		croppedData, err := c.cropImage(r.Data)
+		if err != nil {
+			c.logger.Debug("Failed to crop image: %v", err)
+			// Continue with original image if cropping fails
+		} else {
+			r.Data = croppedData
+		}
 	}
 
 	// close the tab so that we dont receive more network events

@@ -15,15 +15,20 @@ import (
 )
 
 type ImageProcessorRequest struct {
-	URL       string                 `form:"url"`
-	Kind      string                 `form:"kind,omitempty"`
-	Width     int                    `form:"width,omitempty"`
-	Height    int                    `form:"height,omitempty"`
-	UserAgent string                 `form:"userAgent,omitempty"`
-	Timeout   int                    `form:"timeout,omitempty"`
-	Delay     int                    `form:"delay,omitempty"`
-	AsPDF     bool                   `form:"asPDF,omitempty"`
-	Headers   map[string]interface{} `form:"headers,omitempty"`
+	URL        string                 `form:"url"`
+	Kind       string                 `form:"kind,omitempty"`
+	Width      int                    `form:"width,omitempty"`
+	Height     int                    `form:"height,omitempty"`
+	UserAgent  string                 `form:"userAgent,omitempty"`
+	Timeout    int                    `form:"timeout,omitempty"`
+	Delay      int                    `form:"delay,omitempty"`
+	AsPDF      bool                   `form:"asPDF,omitempty"`
+	FullPage   bool                   `form:"fullPage,omitempty"`
+	Headers    map[string]interface{} `form:"headers,omitempty"`
+	OffsetX    int                    `form:"offsetX,omitempty"`    // X offset for cropping
+	OffsetY    int                    `form:"offsetY,omitempty"`    // Y offset for cropping (to skip header)
+	CropWidth  int                    `form:"cropWidth,omitempty"`  // Cropped width
+	CropHeight int                    `form:"cropHeight,omitempty"` // Cropped height
 }
 
 type ImageProcessorOptions struct {
@@ -86,9 +91,13 @@ func (p *ImageProcessor) chromeImage(r *ImageProcessorRequest) ([]byte, error) {
 		UserAgent:  userAgent,
 		Timeout:    timeout,
 		Delay:      delay,
-		FullPage:   true,
+		FullPage:   r.FullPage,
 		AsPDF:      r.AsPDF,
 		HeadersMap: r.Headers,
+		OffsetX:    r.OffsetX,
+		OffsetY:    r.OffsetY,
+		CropWidth:  r.CropWidth,
+		CropHeight: r.CropHeight,
 	}
 	chrome := browser.NewChromeBrowser(options, p.observability)
 
